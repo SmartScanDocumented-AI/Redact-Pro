@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartScan AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-50 min-h-screen p-6 md:p-12">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-12">
+            <h1 class="text-3xl font-black text-slate-800 tracking-tight">SmartScan <span class="text-indigo-600">Pro</span></h1>
+            <p class="text-slate-500 font-medium">Privacy-First Document Redaction</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+                    <form id="upload-form">
+                        <div class="upload-box mb-6" id="drop-zone">
+                            <input type="file" id="file-input" accept="image/*">
+                            <div class="icon-circle">📤</div>
+                            <p class="text-sm font-bold text-slate-700" id="file-name">Drag or Click</p>
+                            <p class="text-xs text-slate-400 mt-1">PNG, JPG up to 10MB</p>
+                        </div>
+
+                        <div class="mb-8">
+                            <span class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Redaction Style</span>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="custom-radio">
+                                    <input type="radio" name="mode" value="black" checked>
+                                    <div class="radio-card">Solid</div>
+                                </label>
+                                <label class="custom-radio">
+                                    <input type="radio" name="mode" value="blur">
+                                    <div class="radio-card">Blur</div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="process-btn">Process Image</button>
+                    </form>
+
+                    <div id="loader" class="hidden py-8 text-center">
+                        <div class="spinner mb-4"></div>
+                        <p class="text-xs font-black text-indigo-500 uppercase tracking-widest">Analyzing Text...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="comparison-card">
+                    <span class="tag tag-before">Original</span>
+                    <div id="before-preview" class="img-placeholder">
+                        No image uploaded
+                    </div>
+                </div>
+
+                <div class="comparison-card">
+                    <span class="tag tag-after">Redacted</span>
+                    <div id="after-preview" class="img-placeholder">
+                        Waiting for scan...
+                    </div>
+                    <button id="download-btn" class="hidden mt-4 bg-indigo-600 text-white text-xs font-bold py-2 rounded-lg">Download Result</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        const beforePreview = document.getElementById('before-preview');
+        const afterPreview = document.getElementById('after-preview');
+        const loader = document.getElementById('loader');
+
+        // Drag & Drop UI effects
+        ['dragenter', 'dragover'].forEach(name => {
+            dropZone.addEventListener(name, () => dropZone.classList.add('drag-active'));
+        });
+        ['dragleave', 'drop'].forEach(name => {
+            dropZone.addEventListener(name, () => dropZone.classList.remove('drag-active'));
+        });
+
+        // Show "Before" preview immediately
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files[0]) {
+                const url = URL.createObjectURL(fileInput.files[0]);
+                beforePreview.innerHTML = `<img src="${url}">`;
+                document.getElementById('file-name').innerText = fileInput.files[0].name;
+            }
+        });
+
+        // Submit to Flask
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!fileInput.files[0]) return alert("Select a file first.");
+
+            form.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('mode', document.querySelector('input[name="mode"]:checked').value);
+
+            try {
+                // Connecting to Port 5000 from app.py
+                const response = await fetch('http://127.0.0.1:5000/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("Server Error");
+
+                const blob = await response.blob();
+                const resultUrl = URL.createObjectURL(blob);
+                afterPreview.innerHTML = `<img src="${resultUrl}">`;
+                
+                // Show Download button
+                const downloadBtn = document.getElementById('download-btn');
+                downloadBtn.classList.remove('hidden');
+                downloadBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = resultUrl;
+                    a.download = "redacted_doc.png";
+                    a.click();
+                };
+
+            } catch (err) {
+                alert("Processing failed. Make sure Flask is running on port 5000.");
+            } finally {
+                loader.classList.add('hidden');
+                form.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
